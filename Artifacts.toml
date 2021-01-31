@@ -1,0 +1,6 @@
+[firi]
+git-tree-sha1 = "90cc57fddd53cb427ea3b91dd4bd85037d42b494"
+
+    [[firi.download]]
+    sha256 = "64a16050b794ba43d70ed3e522d905dd5bc617ea46541adb4e01b642597770b8"
+    url = "https://ndownloader.figshare.com/files/26177723?private_link=33a146841a3f74a74590"
