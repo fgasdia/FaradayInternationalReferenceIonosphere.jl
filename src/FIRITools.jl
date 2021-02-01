@@ -129,12 +129,20 @@ end
 
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns masked by `mask`.
 """
-function quantile(mask, p)
+function quantile(mask, p::T) where T<:Number
     profile = Vector{Float64}(undef, nrow(ALTITUDE))
     i = 1
     for r in eachrow(DATA[!,mask])
         profile[i] = Statistics.quantile(r, p)
         i += 1
+    end
+    return profile
+end
+
+function quantile(mask, p)
+    profile = Array{Float64, 2}(undef, nrow(ALTITUDE), length(p))
+    for j in eachindex(p)
+        profile[:,j] = quantile(mask, p[j])
     end
     return profile
 end

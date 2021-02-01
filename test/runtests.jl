@@ -14,6 +14,9 @@ using CSV, DataFrames
     @test FIRITools.quantile(buildmask(chi=(0, 90)), 1) ==
         Statistics.quantile.(eachrow(profile(buildmask(chi=(0, 90)))), 1)
 
+    q1 = FIRITools.quantile(buildmask(chi=(0, 90)), (0.3, 0.5))
+    @test q1[:,1] == FIRITools.quantile(buildmask(chi=(0, 90)), 0.3)
+    @test q1[:,2] == FIRITools.quantile(buildmask(chi=(0, 90)), 0.5)
 
     function quantilewoextrap(ref, p)
         # Compare to reference profiles without extrapolation
