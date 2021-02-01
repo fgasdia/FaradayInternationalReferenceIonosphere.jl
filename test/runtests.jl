@@ -35,8 +35,10 @@ using CSV, DataFrames
     p4 = FIRITools.extrapolate(profile()[!,"1"], 30:120; N=6)
 
     p5 = FIRITools.extrapolate(profile()[!,"1"], 70:120; max_altitude=60)
+
     @test length(p1) == length(30:120)
     @test length(p5) == length(70:120)
+
     @test p1 == p2
     @test p1 == p3
     @test p1 == p4
@@ -50,4 +52,8 @@ using CSV, DataFrames
     # ep = FIRITools.extrapolate(FIRITools.quantile(buildmask(chi=(0, 95)), 0.5),
     #                            40:110; max_altitude=60)
     # plot(ep, 40:110, xscale=:log10)
+
+    p11 = FIRITools.extrapolate(Matrix(profile()[!,["1", "2"]]), 30:120, N=6)
+    @test p11[:,1] == p4
+    @test p11[:,2] == FIRITools.extrapolate(profile()[!,"2"], 30:120; N=6)
 end

@@ -162,7 +162,7 @@ and including `max_altitude`.
 If `N` is provided, then `max_altitude` is automatically determined as the `N`th element of
 `z`.
 """
-function extrapolate(z, profile, newz; max_altitude=nothing, N=nothing)
+function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=nothing)
     isnothing(max_altitude) && isnothing(N) &&
         throw(ArgumentError("At least one of `max_altitude` or `N` are required."))
     issorted(z) || throw(ArgumentError("`z` must be sorted."))
@@ -171,8 +171,6 @@ function extrapolate(z, profile, newz; max_altitude=nothing, N=nothing)
     maximum(newz) <= maximum(z) ||
         @warn "`newz` extends above `maximum(z)`. `profile` will only be extrapolated below `max_altitude`."
     
-    # TODO: apply to each column
-
     if !isnothing(N)
         max_altitude = z[N]
     end
@@ -189,6 +187,17 @@ function extrapolate(z, profile, newz; max_altitude=nothing, N=nothing)
 end
 extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
     extrapolate(altitude(), profile, newz; max_altitude=max_altitude, N=N)    
+
+function extrapolate(z, profile::AbstractMatrix, newz; max_altitude=nothing, N=nothing)
+    expprofile = Vector{eltype(profile)}()
+    nrows = 0
+    for i in axes(profile, 2)
+        p = extrapolate(z, view(profile,:,i), newz, max_altitude=max_altitude, N=N)
+        append!(expprofile, p)
+        nrows = length(p)
+    end
+    return reshape(expprofile, nrows, size(profile, 2))
+end
 
 
 # NOTE: at this time, models() isn't very important because only 1 model is supported
