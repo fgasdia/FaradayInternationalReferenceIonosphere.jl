@@ -182,7 +182,10 @@ function extrapolate(z, profile, newz; max_altitude=nothing, N=nothing)
     fit = curve_fit(expmodel, jacobian_expmodel, z[mask], profile[mask], p0)
 
     extrapz = filter(x -> x <= max_altitude, newz)
-    return [expmodel(extrapz, fit.param); profile[max_altitude .< z .<= maximum(newz)]]
+    reducedmask = max_altitude > minimum(newz) ? (max_altitude .< z .<= maximum(newz)) :
+        (minimum(newz) .<= z .<= maximum(newz))
+
+    return [expmodel(extrapz, fit.param); profile[reducedmask]]
 end
 extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
     extrapolate(altitude(), profile, newz; max_altitude=max_altitude, N=N)    
