@@ -4,6 +4,9 @@
 `FIRITools` is a collection of convenience functions for working with
 Faraday-International Reference Ionosphere (FIRI) model profiles.
 
+The underlying FIRI-2018 model `DATA`, `HEADER`, and `ALTITUDE`'s can be accessed
+as e.g. `FIRITools.HEADER`.
+
 # References
 
 Friedrich, M., Pock, C., & Torkar, K. (2018).
@@ -15,65 +18,93 @@ module FIRITools
 
 using Artifacts, Statistics
 using CSV, DataFrames
-using LsqFit
+using LsqFit, Interpolations
 
-export header, profile, buildmask
+export firi, buildmask
 
-# TODO: Just read in the file once and then split up components appropriately
-HEADER = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame,
-    transpose=true, select=1:7)
-DATA = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame,
-    skipto=9, footerskip=2, select=2:1981)
-ALTITUDE = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame,
-    skipto=9, footerskip=2, select=[1], header=["altitude, km"], threaded=false, silencewarnings=true)
-@assert nrow(ALTITUDE) == nrow(DATA) "ALTITUDE does not match DATA"
+const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
+function parseheader()
+    types = Dict(:Code=>String, :Month=>Int, :DOY=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int,
+                 :F10_7=>Int)
 
-"""
-    profile()
+    tmpheader = permutedims(first(DF, 6), 1)
 
-Return a copy of profile data as a `DataFrame`.
-"""
-function profile()
-    return copy(DATA)
+    df = DataFrame()
+    for (s, t) in types
+        if t == String
+            df[!,s] = tmpheader[!,s]
+        else
+            df[!,s] = parse.(t, tmpheader[!,s])
+        end
+    end
+    return df
 end
 
-"""
-    profile(mask)
+const HEADER = parseheader()
+const DATA = convert(Matrix, parse.(Float64, DF[8:end-2, 2:end]))  # last 2 rows have Missing
+const ALTITUDE = parse.(Int, DF[8:end-2, 1])
+@assert length(ALTITUDE) == size(DATA, 1) "ALTITUDE does not match DATA"
 
-Return a copy of profile data with columns masked by `mask`.
-
-See also: [`buildmask`](@ref)
-"""
-function profile(mask)
-    return DATA[:,mask]
-end
 
 """
-    header()
+    firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
 
-Return a copy of the data header as a `DataFrame`.
+Return a copy of profile with columns masked by `mask` averaged at each altitude.
 """
-function header()
-    return copy(HEADER)
-end
+function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    mask = trues(nrow(HEADER))
 
-"""
-    header(mask)
+    cols = Dict("Chi, deg"=>chi, "Lat, deg"=>lat, "F10_7"=>f10_7, "DOY"=>doy, "Month"=>month)
+    for (s,v) in cols
+        m = select(HEADER[!,s], v)
+        if !isnothing(m)
+            mask .&= m
+            delete!(cols, s)
+        else
+            @info "Interpolating $s"
+        end
+    end
 
-Return a copy of the data header as a `DataFrame` masked by `mask`.
-"""
-function header(mask)
-    return HEADER[mask,:]
-end
+    # The fields left in `cols` need to be interpolated
+    newcols = Matrix{Float64}(undef, length(ALTITUDE), 0)
+    newmask = trues(nrow(HEADER))
+    for (s,v) in cols
+        uvals = unique(HEADER[!,s])
+        I = sortperm(abs.(v .- uvals))
+        bounds = (uvals[I[1]], uvals[I[2]])
 
-"""
-    altitude()
+        # The lower and upper bound appear many times for every unmasked combination of the
+        # other model parameters
+        mask_lower = (HEADER[!,s] .== bounds[1]) .& mask
+        mask_upper = (HEADER[!,s] .== bounds[2]) .& mask
+        N = count(mask_lower)
+        @assert N == count(mask_upper) "Unequal number of instances of bound values in header"
 
-Return FIRI2018 profile altitudes.
-"""
-function altitude()
-    return ALTITUDE[:,1]
+        mask_lower_idxs = findall(mask_lower)
+        mask_upper_idxs = findall(mask_upper)
+
+        newcols = hcat(newcols, Matrix{Float64}(undef, length(ALTITUDE), N))
+
+        # Generate a single interpolated column of data for every combination of the other
+        # acceptable parameters
+        for i = 1:N
+            d = [DATA[:,mask_lower_idxs[i]] DATA[:,mask_upper_idxs[i]]]
+            for a in eachindex(ALTITUDE)
+                itp = LinearInterpolation(bounds, d[a,:], extrapolation_bc=Line())
+                newcols[a,i] = itp(v)
+            end
+
+            newmask[mask_lower_idxs[i]] = 0
+            newmask[mask_upper_idxs[i]] = 0
+        end
+    end
+
+    mask .&= newmask  # mask out the columns that were used for interpolation
+    profile = DATA[:,mask]
+    profile = hcat(profile, newcols)  # append the columns resulting from interpolation
+
+    return dropdims(mean(profile, dims=2), dims=2)
 end
 
 """
@@ -88,40 +119,14 @@ end
 """
     select(h, x)
 
-Return `x .== h`.
+Return `x .== h` if `h` is in `x`, otherwise `nothing`.
 """
 function select(h, x::T) where T<:Number
-    x .== h
-end
-# TODO: Array-like or range type
-
-"""
-    buildmask(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-
-Construct a `BitArray` mask to be applied across the columns of `FIRITools.DATA`.
-
-With `Tuple` arguments, the first and last elements of the tuple are treated as the extents
-of the mask field, inclusive. If arguments are of `Number` type, an exact match is required.
-
-By default, no masking occurs.
-
-# Examples
-
-To look at daytime ionospheres only:
-```julia-repl
-julia> mask = buildmask(chi=(0, 90))
-```
-"""
-function buildmask(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    mask = trues(nrow(HEADER))
-
-    mask .&= select(HEADER[!,"Chi, deg"], chi) .&
-             select(HEADER[!,"Lat, deg"], lat) .&
-             select(HEADER[!,:F10_7], f10_7)   .&
-             select(HEADER[!,:DOY], doy)       .&
-             select(HEADER[!,:Month], month)
-
-    return mask
+    if h in x
+        return x .== h
+    else
+        return nothing
+    end
 end
 
 """
@@ -130,7 +135,7 @@ end
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns masked by `mask`.
 """
 function quantile(mask, p::T) where T<:Number
-    profile = Vector{Float64}(undef, nrow(ALTITUDE))
+    profile = Vector{Float64}(undef, length(ALTITUDE))
     i = 1
     for r in eachrow(DATA[!,mask])
         profile[i] = Statistics.quantile(r, p)
@@ -140,7 +145,7 @@ function quantile(mask, p::T) where T<:Number
 end
 
 function quantile(mask, p)
-    profile = Array{Float64, 2}(undef, nrow(ALTITUDE), length(p))
+    profile = Array{Float64, 2}(undef, length(ALTITUDE), length(p))
     for j in eachindex(p)
         profile[:,j] = quantile(mask, p[j])
     end
