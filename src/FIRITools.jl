@@ -7,6 +7,9 @@ Faraday-International Reference Ionosphere (FIRI) model profiles.
 The underlying FIRI-2018 model `DATA`, `HEADER`, and `ALTITUDE`'s can be accessed
 as e.g. `FIRITools.HEADER`.
 
+Only the function `firi` is exported, but also see `FIRITools.quantile` and
+`FIRITools.extrapolate`.
+
 # References
 
 Friedrich, M., Pock, C., & Torkar, K. (2018).
@@ -20,7 +23,7 @@ using Artifacts, Statistics
 using CSV, DataFrames
 using LsqFit, Interpolations
 
-export firi, quantile
+export firi
 
 const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
@@ -218,7 +221,7 @@ end
 Return `profile`, originally defined at sorted altitudes `z`, exponentially extrapolated
 at altitudes of `newz` below `z`.
 
-If `z` is not specified, it is assumed that `profile` is defined at `FIRITools.altitude()`.
+If `z` is not specified, it is assumed that `profile` is defined at `FIRITools.ALTITUDE`.
 
 The extrapolation is performed using profile samples from the bottom altitude of `z` up to
 and including `max_altitude`.
@@ -250,7 +253,7 @@ function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=n
     return [expmodel(extrapz, fit.param); profile[reducedmask]]
 end
 extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
-    extrapolate(altitude(), profile, newz; max_altitude=max_altitude, N=N)    
+    extrapolate(ALTITUDE, profile, newz; max_altitude=max_altitude, N=N)    
 
 function extrapolate(z, profile::AbstractMatrix, newz; max_altitude=nothing, N=nothing)
     expprofile = Vector{eltype(profile)}()
