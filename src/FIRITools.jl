@@ -20,7 +20,7 @@ using Artifacts, Statistics
 using CSV, DataFrames
 using LsqFit, Interpolations
 
-export firi, buildmask
+export firi, quantile
 
 const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
@@ -50,61 +50,89 @@ const ALTITUDE = parse.(Int, DF[8:end-2, 1])
 """
     firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
 
-Return a copy of profile with columns masked by `mask` averaged at each altitude.
+Return the average FIRI profile across model parameters selected by the keyword arguments.
 """
 function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+    return dropdims(mean(profiles, dims=2), dims=2)
+end
+
+"""
+    firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+
+Return the average FIRI profile across the model parameters selected by the keyword
+arguments and interpolated at solar zenith angle `chi` and latitude `lat`.
+"""
+function firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+    return dropdims(mean(profiles, dims=2), dims=2)
+end
+
+"""
+    selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+
+Return matrix of selected model profiles.
+"""
+function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
     mask = trues(nrow(HEADER))
 
-    cols = Dict("Chi, deg"=>chi, "Lat, deg"=>lat, "F10_7"=>f10_7, "DOY"=>doy, "Month"=>month)
-    for (s,v) in cols
-        m = select(HEADER[!,s], v)
-        if !isnothing(m)
-            mask .&= m
-            delete!(cols, s)
-        else
-            @info "Interpolating $s"
-        end
-    end
+    mask .&= select(HEADER[!,"Chi, deg"], chi) .&
+             select(HEADER[!,"Lat, deg"], lat) .&
+             select(HEADER[!,:F10_7], f10_7)   .&
+             select(HEADER[!,:DOY], doy)       .&
+             select(HEADER[!,:Month], month)
 
-    # The fields left in `cols` need to be interpolated
-    newcols = Matrix{Float64}(undef, length(ALTITUDE), 0)
-    newmask = trues(nrow(HEADER))
-    for (s,v) in cols
+    return DATA[:,mask]
+end
+
+"""
+Return matrix of selected model profiles interpolated at solar zenith angle `chi` and
+latitude `lat`.
+"""
+function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    mask = trues(nrow(HEADER))
+
+    mask .&= select(HEADER[!,:F10_7], f10_7) .&
+             select(HEADER[!,:DOY], doy)     .&
+             select(HEADER[!,:Month], month)
+
+    function twoclosest(s, v)
         uvals = unique(HEADER[!,s])
         I = sortperm(abs.(v .- uvals))
-        bounds = (uvals[I[1]], uvals[I[2]])
-
-        # The lower and upper bound appear many times for every unmasked combination of the
-        # other model parameters
-        mask_lower = (HEADER[!,s] .== bounds[1]) .& mask
-        mask_upper = (HEADER[!,s] .== bounds[2]) .& mask
-        N = count(mask_lower)
-        @assert N == count(mask_upper) "Unequal number of instances of bound values in header"
-
-        mask_lower_idxs = findall(mask_lower)
-        mask_upper_idxs = findall(mask_upper)
-
-        newcols = hcat(newcols, Matrix{Float64}(undef, length(ALTITUDE), N))
-
-        # Generate a single interpolated column of data for every combination of the other
-        # acceptable parameters
-        for i = 1:N
-            d = [DATA[:,mask_lower_idxs[i]] DATA[:,mask_upper_idxs[i]]]
-            for a in eachindex(ALTITUDE)
-                itp = LinearInterpolation(bounds, d[a,:], extrapolation_bc=Line())
-                newcols[a,i] = itp(v)
-            end
-
-            newmask[mask_lower_idxs[i]] = 0
-            newmask[mask_upper_idxs[i]] = 0
-        end
+        return [uvals[I[1]], uvals[I[2]]]  # 2 closest matches
     end
 
-    mask .&= newmask  # mask out the columns that were used for interpolation
-    profile = DATA[:,mask]
-    profile = hcat(profile, newcols)  # append the columns resulting from interpolation
+    chibnds = twoclosest("Chi, deg", chi)
+    latbnds = twoclosest("Lat, deg", lat)
 
-    return dropdims(mean(profile, dims=2), dims=2)
+    # Mask all but the 2 closest values of chi and lat to the target chi and lat
+    mask .&= .!isnothing.(indexin(HEADER[!,"Chi, deg"], chibnds)) .&
+             .!isnothing.(indexin(HEADER[!,"Lat, deg"], latbnds))
+
+    N = count(mask)
+    maskidxs = findall(mask)
+
+    profiles = Matrix{Float64}(undef, length(ALTITUDE), N÷4)
+
+    # Although not a general solution, we know the format of Chi guarantees that occurences
+    # of the two closest values will be in pairs and that both Chi and Lat are sorted
+    # so every 4 indices in the mask form a group that covers
+    # [(chi_low, lat_low) (chi_high, lat_low);
+    #  (chi_low, lat_high) (chi_high, lat_high)]
+    j = 1
+    for i = 1:4:N
+        chis = HEADER[[maskidxs[i], maskidxs[i+1]], "Chi, deg"]
+        lats = HEADER[[maskidxs[i], maskidxs[i+2]], "Lat, deg"]
+        for a in eachindex(ALTITUDE)
+            d = [DATA[a,maskidxs[i]] DATA[a,maskidxs[i+2]];
+                 DATA[a,maskidxs[i+1]] DATA[a,maskidxs[i+3]]]
+            itp = LinearInterpolation((chis, lats), d, extrapolation_bc=Line())
+            profiles[a,j] = itp(chi, lat)
+        end
+        j += 1
+    end
+
+    return profiles
 end
 
 """
@@ -122,32 +150,55 @@ end
 Return `x .== h` if `h` is in `x`, otherwise `nothing`.
 """
 function select(h, x::T) where T<:Number
-    if h in x
-        return x .== h
-    else
-        return nothing
-    end
+    x in h || @warn "$x is not in model parameters. Looking for interpolating form of `selectprofiles`?"
+    
+    return x .== h
 end
 
 """
-    quantile(mask, p)
+    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
 
-Compute the quantile(s) `p` at each `ALTITUDE` with data columns masked by `mask`.
+Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by the keyword
+arguments.
 """
-function quantile(mask, p::T) where T<:Number
-    profile = Vector{Float64}(undef, length(ALTITUDE))
-    i = 1
-    for r in eachrow(DATA[!,mask])
-        profile[i] = Statistics.quantile(r, p)
-        i += 1
+function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+    profile = _quantile(profiles, p)
+
+    if p isa Number
+        # make `profile` a Vector for consistency with `firi`
+        profile = dropdims(profile, dims=2)
     end
+
     return profile
 end
 
-function quantile(mask, p)
+"""
+    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+
+Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by keyword
+arguments and interpolated to solar zenith angle `chi` and latitude `lat`.
+"""
+function quantile(chi, lat, p; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+    profile = _quantile(profiles, p)
+
+    if p isa Number
+        # make `profile` a Vector for consistency with `firi`
+        profile = dropdims(profile, dims=2)
+    end
+
+    return profile
+end
+
+function _quantile(profiles, p)
     profile = Array{Float64, 2}(undef, length(ALTITUDE), length(p))
     for j in eachindex(p)
-        profile[:,j] = quantile(mask, p[j])
+        i = 1
+        for r in eachrow(profiles)
+            profile[i,j] = Statistics.quantile(r, p[j])
+            i += 1
+        end
     end
     return profile
 end
