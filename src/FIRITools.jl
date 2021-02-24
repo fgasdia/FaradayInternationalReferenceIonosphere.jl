@@ -5,7 +5,8 @@
 Faraday-International Reference Ionosphere (FIRI) model profiles.
 
 The underlying FIRI-2018 model `DATA`, `HEADER`, and `ALTITUDE`'s can be accessed
-as e.g. `FIRITools.HEADER`.
+as e.g. `FIRITools.HEADER`. The unit of `ALTITUDE` is meters and `DATA` is electrons per
+cubic meter.
 
 Only the function `firi` is exported, but also see `FIRITools.quantile` and
 `FIRITools.extrapolate`.
@@ -24,6 +25,8 @@ using CSV, DataFrames
 using LsqFit, Interpolations
 
 export firi
+
+const MIN_DENSITY = 1e-4
 
 const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
@@ -46,7 +49,7 @@ end
 
 const HEADER = parseheader()
 const DATA = convert(Matrix, parse.(Float64, DF[8:end-2, 2:end]))  # last 2 rows have Missing
-const ALTITUDE = parse.(Int, DF[8:end-2, 1])
+const ALTITUDE = parse.(Int, DF[8:end-2, 1])*1000
 @assert length(ALTITUDE) == size(DATA, 1) "ALTITUDE does not match DATA"
 
 
@@ -57,7 +60,9 @@ Return the average FIRI profile across model parameters selected by the keyword 
 """
 function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
     profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
-    return dropdims(mean(profiles, dims=2), dims=2)
+    profile = mean(profiles, dims=2)
+    replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
+    return dropdims(profile, dims=2)
 end
 
 """
@@ -68,7 +73,9 @@ arguments and interpolated at solar zenith angle `chi` and latitude `lat`.
 """
 function firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
     profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
-    return dropdims(mean(profiles, dims=2), dims=2)
+    profile = mean(profiles, dims=2)
+    replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
+    return dropdims(profile, dims=2)
 end
 
 """
@@ -168,6 +175,8 @@ function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), 
     profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
     profile = _quantile(profiles, p)
 
+    replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
+
     if p isa Number
         # make `profile` a Vector for consistency with `firi`
         profile = dropdims(profile, dims=2)
@@ -185,6 +194,8 @@ arguments and interpolated to solar zenith angle `chi` and latitude `lat`.
 function quantile(chi, lat, p; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
     profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
     profile = _quantile(profiles, p)
+
+    replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
 
     if p isa Number
         # make `profile` a Vector for consistency with `firi`
