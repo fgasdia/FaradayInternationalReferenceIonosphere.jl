@@ -96,24 +96,28 @@ function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 35
 end
 
 """
+    selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+
 Return matrix of selected model profiles interpolated at solar zenith angle `chi` and
 latitude `lat`.
 """
 function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    issorted(unique(HEADER[!, "Chi, deg"])) || throw(DomainError("Chi column of HEADER is not sorted"))
+    issorted(unique(HEADER[!, "Lat, deg"])) || throw(DomainError("Lat column of HEADER is not sorted"))
+
+    if chi > 130
+        @warn "`chi` greater than 130° uses `chi = 130°`" maxlog=3
+        chi = oftype(chi, 130)
+    end
+
     mask = trues(nrow(HEADER))
 
     mask .&= select(HEADER[!,:F10_7], f10_7) .&
              select(HEADER[!,:DOY], doy)     .&
              select(HEADER[!,:Month], month)
 
-    function twoclosest(s, v)
-        uvals = unique(HEADER[!,s])
-        I = sortperm(abs.(v .- uvals))
-        return [uvals[I[1]], uvals[I[2]]]  # 2 closest matches
-    end
-
-    chibnds = twoclosest("Chi, deg", chi)
-    latbnds = twoclosest("Lat, deg", lat)
+    chibnds = twoclosest(HEADER[!,"Chi, deg"], chi)
+    latbnds = twoclosest(HEADER[!,"Lat, deg"], lat)
 
     # Mask all but the 2 closest values of chi and lat to the target chi and lat
     mask .&= .!isnothing.(indexin(HEADER[!,"Chi, deg"], chibnds)) .&
@@ -122,27 +126,86 @@ function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
     N = count(mask)
     maskidxs = findall(mask)
 
-    profiles = Matrix{Float64}(undef, length(ALTITUDE), N÷4)
+    # We need to explicitly handle 1D vs 2D interpolation (if lat, or chi don't need interp)
+    if isequal(chibnds...) && isequal(latbnds...)
+        profiles = DATA[:, maskidxs]
+    elseif isequal(chibnds...)
+        profiles = Matrix{Float64}(undef, length(ALTITUDE), N÷2)
 
-    # Although not a general solution, we know the format of Chi guarantees that occurences
-    # of the two closest values will be in pairs and that both Chi and Lat are sorted
-    # so every 4 indices in the mask form a group that covers
-    # [(chi_low, lat_low) (chi_high, lat_low);
-    #  (chi_low, lat_high) (chi_high, lat_high)]
-    j = 1
-    for i = 1:4:N
-        chis = HEADER[[maskidxs[i], maskidxs[i+1]], "Chi, deg"]
-        lats = HEADER[[maskidxs[i], maskidxs[i+2]], "Lat, deg"]
-        for a in eachindex(ALTITUDE)
-            d = [DATA[a,maskidxs[i]] DATA[a,maskidxs[i+2]];
-                 DATA[a,maskidxs[i+1]] DATA[a,maskidxs[i+3]]]
-            itp = LinearInterpolation((chis, lats), d, extrapolation_bc=Line())
-            profiles[a,j] = itp(chi, lat)
+        j = 1
+        for i = 1:2:N
+            for a in axes(DATA, 1)  # altitude
+                d = DATA[a,maskidxs[[i, i+1]]]
+                itp = LinearInterpolation(latbnds, d, extrapolation_bc=Line())
+                profiles[a,j] = itp(lat)
+            end
+            j += 1
         end
-        j += 1
+    elseif isequal(latbnds...)
+        profiles = Matrix{Float64}(undef, length(ALTITUDE), N÷2)
+
+        j = 1
+        for i = 1:2:N
+            for a in axes(DATA, 1)  # altitude
+                d = DATA[a,maskidxs[[i, i+1]]]
+                itp = LinearInterpolation(chibnds, d, extrapolation_bc=Line())
+                profiles[a,j] = itp(chi)
+            end
+            j += 1
+        end
+    else
+        # Although not a general solution, we know the format of Chi guarantees that occurences
+        # of the two closest values will be in pairs and that both Chi and Lat are sorted
+        # so every 4 indices in the mask form a group that covers
+        # [(chi_low, lat_low) (chi_high, lat_low);
+        #  (chi_low, lat_high) (chi_high, lat_high)]
+        profiles = Matrix{Float64}(undef, length(ALTITUDE), N÷4)
+
+        j = 1
+        for i = 1:4:N
+            for a in axes(DATA, 1)  # altitude
+                d = [DATA[a,maskidxs[i]] DATA[a,maskidxs[i+2]];
+                     DATA[a,maskidxs[i+1]] DATA[a,maskidxs[i+3]]]
+                itp = LinearInterpolation((chibnds, latbnds), d, extrapolation_bc=Line())
+                profiles[a,j] = itp(chi, lat)
+            end
+            j += 1
+        end
     end
 
     return profiles
+end
+
+"""
+    twoclosest(s, v)
+
+Return:
+    - the two closest values of vector `s` to `v` if `v` is outside of the range of
+        values in `s` (extrapolating)
+    - or the closest value on each side of `v` in column `s` if interpolating
+    - or `[v, v]` if `v` is exactly in `s`.
+
+The two values are sorted.
+"""
+function twoclosest(s, v)
+    uvals = unique(s)
+
+    if v in uvals
+        return [v, v]
+    elseif v >= maximum(uvals) || v <= minimum(uvals)
+        # We're extrapolating or at a min/max
+        I = sortperm(abs.(v .- uvals))
+        return sort([uvals[I[1]], uvals[I[2]]])  # 2 closest matches
+    else
+        # We're interpolating, make sure we return the closest on each side of `v`
+        udiffs = v .- uvals
+        v1 = minimum(x->x > 0 ? x : Inf, udiffs)  # closest val with positive diff
+        v2 = -minimum(x->x < 0 ? abs(x) : Inf, udiffs)  # closest val with negative diff
+        
+        I1 = findfirst(isequal(v1), udiffs)
+        I2 = findfirst(isequal(v2), udiffs)
+        return sort([uvals[I1], uvals[I2]])
+    end
 end
 
 """
@@ -253,9 +316,10 @@ function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=n
         max_altitude = z[N]
     end
 
-    p0 = [1.0, 0.3]
+    p0 = [1.0, 3e-4]
     mask = z .<= max_altitude
     fit = curve_fit(expmodel, jacobian_expmodel, z[mask], profile[mask], p0)
+    fit.converged || @warn "Exponential fit did not converge"
 
     extrapz = filter(x -> x <= max_altitude, newz)
     reducedmask = max_altitude > minimum(newz) ? (max_altitude .< z .<= maximum(newz)) :
