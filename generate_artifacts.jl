@@ -46,14 +46,15 @@ close(tar)
 rm(firi_xlsx)
 rm(firi_dir, recursive=true)
 
-# Now post firi.tar.gz to figshare...
+# Now post firi.tar.gz to figshare.
+# Friendly URL: https://figshare.com/s/33a146841a3f74a74590
+# Then (don't skip posting to figshare, because it downloads the tarball!)...
 
 # Write the Artifacts.toml file
-# Friendly URL: https://figshare.com/s/33a146841a3f74a74590
 add_artifact!(
     "Artifacts.toml",
     "firi",
-    "https://ndownloader.figshare.com/files/26177723?private_link=33a146841a3f74a74590",
+    "https://ndownloader.figshare.com/files/26640602?private_link=33a146841a3f74a74590",
     force=true,
 )
 
