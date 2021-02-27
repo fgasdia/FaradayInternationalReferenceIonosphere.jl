@@ -77,7 +77,7 @@ using CSV, DataFrames
     @test p1 == p2
     @test p1 == p3
     @test p1 == p4
-    @test p1[60 .< 30:120] == firi()[60e3 .< FIRITools.ALTITUDE .<= 120e3]
+    @test p1[60 .< 30:120] ≈ firi()[60e3 .< FIRITools.ALTITUDE .<= 120e3]
     @test p1[70 .<= 30:120] == p5
 
     # plot(firi(), FIRITools.ALTITUDE, xscale=:log10)
