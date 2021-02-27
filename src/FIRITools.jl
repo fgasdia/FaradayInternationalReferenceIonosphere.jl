@@ -31,8 +31,7 @@ const MIN_DENSITY = 1e-4
 const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
 function parseheader()
-    types = Dict(:Code=>String, :Month=>Int, :DOY=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int,
-                 :F10_7=>Int)
+    types = Dict(:Code=>String, :Month=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int, :F10_7=>Int)
 
     tmpheader = permutedims(first(DF, 6), 1)
 
@@ -54,54 +53,53 @@ const ALTITUDE = parse.(Int, DF[8:end-2, 1])*1000
 
 
 """
-    firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Return the average FIRI profile across model parameters selected by the keyword arguments.
 """
-function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, month=month)
     profile = mean(profiles, dims=2)
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
     return dropdims(profile, dims=2)
 end
 
 """
-    firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    firi(chi, lat; f10_7=(75, 200), month=(1, 12))
 
 Return the average FIRI profile across the model parameters selected by the keyword
 arguments and interpolated at solar zenith angle `chi` and latitude `lat`.
 """
-function firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+function firi(chi, lat; f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, month=month)
     profile = mean(profiles, dims=2)
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
     return dropdims(profile, dims=2)
 end
 
 """
-    selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Return matrix of selected model profiles.
 """
-function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
     mask = trues(nrow(HEADER))
 
     mask .&= select(HEADER[!,"Chi, deg"], chi) .&
              select(HEADER[!,"Lat, deg"], lat) .&
              select(HEADER[!,:F10_7], f10_7)   .&
-             select(HEADER[!,:DOY], doy)       .&
              select(HEADER[!,:Month], month)
 
     return DATA[:,mask]
 end
 
 """
-    selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
 
 Return matrix of selected model profiles interpolated at solar zenith angle `chi` and
 latitude `lat`.
 """
-function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
     issorted(unique(HEADER[!, "Chi, deg"])) || throw(DomainError("Chi column of HEADER is not sorted"))
     issorted(unique(HEADER[!, "Lat, deg"])) || throw(DomainError("Lat column of HEADER is not sorted"))
 
@@ -110,10 +108,13 @@ function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
         chi = oftype(chi, 130)
     end
 
+    if chi < 0 || lat < 0
+        throw(ArgumentError("`chi` or `lat` below 0° is not supported. See Friedrich et al., “FIRI-2018”."))
+    end
+
     mask = trues(nrow(HEADER))
 
     mask .&= select(HEADER[!,:F10_7], f10_7) .&
-             select(HEADER[!,:DOY], doy)     .&
              select(HEADER[!,:Month], month)
 
     chibnds = twoclosest(HEADER[!,"Chi, deg"], chi)
@@ -229,13 +230,13 @@ function select(h, x::T) where T<:Number
 end
 
 """
-    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by the keyword
 arguments.
 """
-function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, month=month)
     profile = _quantile(profiles, p)
 
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
@@ -249,13 +250,13 @@ function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), 
 end
 
 """
-    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
 
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by keyword
 arguments and interpolated to solar zenith angle `chi` and latitude `lat`.
 """
-function quantile(chi, lat, p; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+function quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, month=month)
     profile = _quantile(profiles, p)
 
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
@@ -290,10 +291,10 @@ function jacobian_expmodel(z, p)
 end
 
 """
-    extrapolate([z,] profile, newz; kwargs...)
+    extrapolate([z,] profile, newz; max_altitude=nothing, N=nothing)
 
 Return `profile`, originally defined at sorted altitudes `z`, exponentially extrapolated
-at altitudes of `newz` below `z`.
+at altitudes of `newz` below `z` and interpolated to `newz` elsewhere.
 
 If `z` is not specified, it is assumed that `profile` is defined at `FIRITools.ALTITUDE`.
 
@@ -303,7 +304,8 @@ and including `max_altitude`.
 If `N` is provided, then `max_altitude` is automatically determined as the `N`th element of
 `z`.
 """
-function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=nothing)
+function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRange;
+                     max_altitude=nothing, N=nothing)
     isnothing(max_altitude) && isnothing(N) &&
         throw(ArgumentError("At least one of `max_altitude` or `N` are required."))
     issorted(z) || throw(ArgumentError("`z` must be sorted."))
@@ -322,19 +324,26 @@ function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=n
     fit.converged || @warn "Exponential fit did not converge"
 
     extrapz = filter(x -> x <= max_altitude, newz)
-    reducedmask = max_altitude > minimum(newz) ? (max_altitude .< z .<= maximum(newz)) :
-        (minimum(newz) .<= z .<= maximum(newz))
+    itpmask = max_altitude > minimum(newz) ? (max_altitude .< newz .<= maximum(newz)) :
+        (minimum(newz) .<= newz .<= maximum(newz))
+    
+    itp = CubicSplineInterpolation(z, profile)
 
-    return [expmodel(extrapz, fit.param); profile[reducedmask]]
+    extrapprofile = expmodel(extrapz, fit.param)
+    itpprofile = itp(newz[itpmask])
+
+    return [extrapprofile; itpprofile]
 end
 extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
-    extrapolate(ALTITUDE, profile, newz; max_altitude=max_altitude, N=N)    
+    extrapolate(minimum(ALTITUDE):1000:maximum(ALTITUDE), profile, newz;
+                max_altitude=max_altitude, N=N)    
 
-function extrapolate(z, profile::AbstractMatrix, newz; max_altitude=nothing, N=nothing)
+function extrapolate(z::AbstractRange, profile::AbstractMatrix, newz::AbstractRange;
+                     max_altitude=nothing, N=nothing)
     expprofile = Vector{eltype(profile)}()
     nrows = 0
     for i in axes(profile, 2)
-        p = extrapolate(z, view(profile,:,i), newz, max_altitude=max_altitude, N=N)
+        p = extrapolate(z, view(profile,:,i), newz; max_altitude=max_altitude, N=N)
         append!(expprofile, p)
         nrows = length(p)
     end
