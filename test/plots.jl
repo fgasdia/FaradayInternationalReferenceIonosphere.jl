@@ -73,7 +73,7 @@ for la in interp_lat
           linestyle=:dash)
 end
 display(p)
-savefig("alt.png")
+savefig("lat.png")
 
 real_sza = unique(FIRITools.HEADER[!,"Chi, deg"])
 chis = 0:5:130
@@ -101,7 +101,6 @@ savefig(p, "sza.png")
 real_sza = [75, 80, 85, 90, 95, 100]
 chis = 75:100
 interp_sza = setdiff(chis, real_sza)
-# interp_sza = 89
 N = length(chis)
 cmap = palette(:rainbow, N, rev=true)
 
