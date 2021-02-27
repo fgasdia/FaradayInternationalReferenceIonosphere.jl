@@ -291,10 +291,10 @@ function jacobian_expmodel(z, p)
 end
 
 """
-    extrapolate([z,] profile, newz; kwargs...)
+    extrapolate([z,] profile, newz; max_altitude=nothing, N=nothing)
 
 Return `profile`, originally defined at sorted altitudes `z`, exponentially extrapolated
-at altitudes of `newz` below `z`.
+at altitudes of `newz` below `z` and interpolated to `newz` elsewhere.
 
 If `z` is not specified, it is assumed that `profile` is defined at `FIRITools.ALTITUDE`.
 
@@ -304,7 +304,8 @@ and including `max_altitude`.
 If `N` is provided, then `max_altitude` is automatically determined as the `N`th element of
 `z`.
 """
-function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=nothing)
+function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRange;
+                     max_altitude=nothing, N=nothing)
     isnothing(max_altitude) && isnothing(N) &&
         throw(ArgumentError("At least one of `max_altitude` or `N` are required."))
     issorted(z) || throw(ArgumentError("`z` must be sorted."))
@@ -323,19 +324,26 @@ function extrapolate(z, profile::AbstractVector, newz; max_altitude=nothing, N=n
     fit.converged || @warn "Exponential fit did not converge"
 
     extrapz = filter(x -> x <= max_altitude, newz)
-    reducedmask = max_altitude > minimum(newz) ? (max_altitude .< z .<= maximum(newz)) :
-        (minimum(newz) .<= z .<= maximum(newz))
+    itpmask = max_altitude > minimum(newz) ? (max_altitude .< newz .<= maximum(newz)) :
+        (minimum(newz) .<= newz .<= maximum(newz))
+    
+    itp = CubicSplineInterpolation(z, profile)
 
-    return [expmodel(extrapz, fit.param); profile[reducedmask]]
+    extrapprofile = expmodel(extrapz, fit.param)
+    itpprofile = itp(newz[itpmask])
+
+    return [extrapprofile; itpprofile]
 end
 extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
-    extrapolate(ALTITUDE, profile, newz; max_altitude=max_altitude, N=N)    
+    extrapolate(minimum(ALTITUDE):1000:maximum(ALTITUDE), profile, newz;
+                max_altitude=max_altitude, N=N)    
 
-function extrapolate(z, profile::AbstractMatrix, newz; max_altitude=nothing, N=nothing)
+function extrapolate(z::AbstractRange, profile::AbstractMatrix, newz::AbstractRange;
+                     max_altitude=nothing, N=nothing)
     expprofile = Vector{eltype(profile)}()
     nrows = 0
     for i in axes(profile, 2)
-        p = extrapolate(z, view(profile,:,i), newz, max_altitude=max_altitude, N=N)
+        p = extrapolate(z, view(profile,:,i), newz; max_altitude=max_altitude, N=N)
         append!(expprofile, p)
         nrows = length(p)
     end

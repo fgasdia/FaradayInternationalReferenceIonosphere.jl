@@ -58,8 +58,11 @@ using CSV, DataFrames
     # plot(ref30.ne, ref30.alt, label="Wei 30", xlims=(10^4, 4e10), ylims=(55, 110), xscale=:log10)
     # plot!(FIRITools.quantile(chi=(0, 95), 0.3), FIRITools.ALTITUDE, label=30, xscale=:log10)
 
-    p1 = FIRITools.extrapolate(FIRITools.ALTITUDE, firi(), 30e3:1e3:120e3; max_altitude=60e3)
-    p2 = FIRITools.extrapolate(FIRITools.ALTITUDE, firi(), 30e3:1e3:120e3; N=6)
+    @test_throws ArgumentError FIRITools.extrapolate(firi(), 30e3:1e3:120e3)
+
+    firialt = minimum(FIRITools.ALTITUDE):1000:maximum(FIRITools.ALTITUDE)
+    p1 = FIRITools.extrapolate(firialt, firi(), 30e3:1e3:120e3; max_altitude=60e3)
+    p2 = FIRITools.extrapolate(firialt, firi(), 30e3:1e3:120e3; N=6)
     p3 = FIRITools.extrapolate(firi(), 30e3:1e3:120e3; max_altitude=60e3)
     p4 = FIRITools.extrapolate(firi(), 30e3:1e3:120e3; N=6)
 
@@ -87,4 +90,7 @@ using CSV, DataFrames
     p11 = FIRITools.extrapolate(FIRITools.DATA[:,[1, 2]], 30e3:1e3:120e3, N=6)
     @test p11[:,1] == FIRITools.extrapolate(FIRITools.DATA[:,1], 30e3:1e3:120e3, N=6)
     @test p11[:,2] == FIRITools.extrapolate(FIRITools.DATA[:,2], 30e3:1e3:120e3; N=6)
+
+    newz = 30e3:250:110e3
+    @test length(FIRITools.extrapolate(firi(), newz, N=6)) == length(newz)
 end
