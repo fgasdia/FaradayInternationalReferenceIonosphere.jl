@@ -4,14 +4,14 @@ using CSV, DataFrames
 
 @testset "FIRITools.jl" begin
     @test size(FIRITools.DATA) == (94, 1980)  # for firi2018
-    @test size(FIRITools.HEADER) == (1980, 6)
+    @test size(FIRITools.HEADER) == (1980, 5)
 
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 90) == [90, 90]
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 89) == [85, 90]
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 135) == [100, 130]
 
     @test size(FIRITools.selectprofiles()) == (94, 1980)
-    @test size(FIRITools.selectprofiles(doy=(1, 180))) == (94, 1980÷2)
+    @test size(FIRITools.selectprofiles(month=(1, 6))) == (94, 1980÷2)
     @test_logs (:warn, "15 is not in model parameters. Looking for interpolating form of `selectprofiles`?") FIRITools.selectprofiles(chi=15) 
     
     # Try interpolating chi and lat. Should always have same size
@@ -30,8 +30,11 @@ using CSV, DataFrames
     # profiles causes there to be some crossing density regions
 
     @test size(firi()) == (94,)
-    @test size(firi(doy=(1, 180))) == (94,)
+    @test size(firi(month=(1, 6))) == (94,)
     @test size(firi(15, 10)) == (94,)
+
+    @test_throws ArgumentError firi(-10, 45)
+    @test_throws ArgumentError firi(30, -15)
     @test_logs (:warn, "`chi` greater than 130° uses `chi = 130°`") firi(160, 45)
 
     @test FIRITools.quantile(1, chi=(0, 90)) ==

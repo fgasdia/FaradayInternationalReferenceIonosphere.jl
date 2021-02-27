@@ -31,8 +31,7 @@ const MIN_DENSITY = 1e-4
 const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
 
 function parseheader()
-    types = Dict(:Code=>String, :Month=>Int, :DOY=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int,
-                 :F10_7=>Int)
+    types = Dict(:Code=>String, :Month=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int, :F10_7=>Int)
 
     tmpheader = permutedims(first(DF, 6), 1)
 
@@ -54,54 +53,53 @@ const ALTITUDE = parse.(Int, DF[8:end-2, 1])*1000
 
 
 """
-    firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Return the average FIRI profile across model parameters selected by the keyword arguments.
 """
-function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+function firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, month=month)
     profile = mean(profiles, dims=2)
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
     return dropdims(profile, dims=2)
 end
 
 """
-    firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    firi(chi, lat; f10_7=(75, 200), month=(1, 12))
 
 Return the average FIRI profile across the model parameters selected by the keyword
 arguments and interpolated at solar zenith angle `chi` and latitude `lat`.
 """
-function firi(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+function firi(chi, lat; f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, month=month)
     profile = mean(profiles, dims=2)
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
     return dropdims(profile, dims=2)
 end
 
 """
-    selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Return matrix of selected model profiles.
 """
-function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
     mask = trues(nrow(HEADER))
 
     mask .&= select(HEADER[!,"Chi, deg"], chi) .&
              select(HEADER[!,"Lat, deg"], lat) .&
              select(HEADER[!,:F10_7], f10_7)   .&
-             select(HEADER[!,:DOY], doy)       .&
              select(HEADER[!,:Month], month)
 
     return DATA[:,mask]
 end
 
 """
-    selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
 
 Return matrix of selected model profiles interpolated at solar zenith angle `chi` and
 latitude `lat`.
 """
-function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
     issorted(unique(HEADER[!, "Chi, deg"])) || throw(DomainError("Chi column of HEADER is not sorted"))
     issorted(unique(HEADER[!, "Lat, deg"])) || throw(DomainError("Lat column of HEADER is not sorted"))
 
@@ -110,10 +108,13 @@ function selectprofiles(chi, lat; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
         chi = oftype(chi, 130)
     end
 
+    if chi < 0 || lat < 0
+        throw(ArgumentError("`chi` or `lat` below 0° is not supported. See Friedrich et al., “FIRI-2018”."))
+    end
+
     mask = trues(nrow(HEADER))
 
     mask .&= select(HEADER[!,:F10_7], f10_7) .&
-             select(HEADER[!,:DOY], doy)     .&
              select(HEADER[!,:Month], month)
 
     chibnds = twoclosest(HEADER[!,"Chi, deg"], chi)
@@ -229,13 +230,13 @@ function select(h, x::T) where T<:Number
 end
 
 """
-    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by the keyword
 arguments.
 """
-function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, doy=doy, month=month)
+function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi=chi, lat=lat, f10_7=f10_7, month=month)
     profile = _quantile(profiles, p)
 
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
@@ -249,13 +250,13 @@ function quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), 
 end
 
 """
-    quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), doy=(15, 350), month=(1, 12))
+    quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
 
 Compute the quantile(s) `p` at each `ALTITUDE` with data columns selected by keyword
 arguments and interpolated to solar zenith angle `chi` and latitude `lat`.
 """
-function quantile(chi, lat, p; f10_7=(75, 200), doy=(15, 350), month=(1, 12))
-    profiles = selectprofiles(chi, lat, f10_7=f10_7, doy=doy, month=month)
+function quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
+    profiles = selectprofiles(chi, lat, f10_7=f10_7, month=month)
     profile = _quantile(profiles, p)
 
     replace!(x -> x<MIN_DENSITY ? MIN_DENSITY : x, profile)
