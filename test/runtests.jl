@@ -6,6 +6,12 @@ using CSV, DataFrames
     @test size(FIRITools.DATA) == (94, 1980)  # for firi2018
     @test size(FIRITools.HEADER) == (1980, 5)
 
+    @test FIRITools.values(:f10_7) == FIRITools.values("f10_7")
+    @test FIRITools.values(:f10_7) == unique(FIRITools.HEADER[!,:F10_7])
+    @test FIRITools.values(:chi) == unique(FIRITools.HEADER[!,"Chi, deg"])
+    @test FIRITools.values(:lat) == unique(FIRITools.HEADER[!,"Lat, deg"])
+    @test FIRITools.values(:month) == unique(FIRITools.HEADER[!,"Month"])
+
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 90) == [90, 90]
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 89) == [85, 90]
     @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 135) == [100, 130]

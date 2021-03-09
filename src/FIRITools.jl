@@ -51,6 +51,25 @@ const DATA = convert(Matrix, parse.(Float64, DF[8:end-2, 2:end]))  # last 2 rows
 const ALTITUDE = parse.(Int, DF[8:end-2, 1])*1000
 @assert length(ALTITUDE) == size(DATA, 1) "ALTITUDE does not match DATA"
 
+"""
+    values(s)
+
+Return the FIRI model values of parameter `s`.
+"""
+function values(s)
+    if s in ("f10_7", :f10_7)
+        return [75, 130, 200]  # == unique(FIRITools.HEADER[!,:F10_7])
+    elseif s in ("chi", :chi)
+        return [0, 30, 45, 60, 75, 80, 85, 90, 95, 100, 130]
+    elseif s in ("lat", :lat)
+        return [0, 15, 30, 45, 60]
+    elseif s in ("month", :month)
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    else
+        throw(ArgumentError("$s is not an FIRI model parameter"))
+    end
+end
+
 
 """
     firi(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
