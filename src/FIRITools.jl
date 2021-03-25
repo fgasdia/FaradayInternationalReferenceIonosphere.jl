@@ -320,7 +320,7 @@ function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRa
 
     return exp.(itpprofile)
 end
-extrapolate(profile, newz) = extrapolate(ALTITUDE[begin]:1000:ALTITUDE[end], profile, newz)    
+extrapolate(profile, newz) = extrapolate(first(ALTITUDE):1000:last(ALTITUDE), profile, newz)    
 
 function extrapolate(z::AbstractRange, profile::AbstractMatrix, newz::AbstractRange)
     expprofile = Vector{eltype(profile)}()
