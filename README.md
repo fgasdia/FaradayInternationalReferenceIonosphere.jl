@@ -14,10 +14,10 @@ profile = firi(; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 
 Each of the keyword arguments can either be a `Tuple` that inclusively brackets the range of values to be included in the average profile or can be a single value. Note that no interpolation occurs! If the value specified for `f10_7` is `100` (which is not one of the values in the model output) then a warning will be printed and an empty profile will be returned.
 
-The raw model data can be accessed as `FIRITools.ALTITUDE` for a `Vector` of the altitude in meters, `FIRITools.DATA` for a matrix of each electron density profile in electrons per cubic meter, and `FIRITools.HEADER` for a `DataFrame` with each combination of FIRI model parameters. To find the acceptable values of the `f10_7` field, for example, you can use
+The raw model data can be accessed as `FIRITools.ALTITUDE` for a `Vector` of the altitude in meters, `FIRITools.DATA` for a `Matrix` of each electron density profile in electrons per cubic meter, and `FIRITools.HEADER` for a `Table` with each combination of FIRI model parameters. To find the acceptable values of the `f10_7` field, for example, you can use
 
 ```julia
-unique(FIRITools.HEADER[!,"F10_7"])
+unique(FIRITools.HEADER.f10_7)
 ```
 
 Although day of year ("DOY") appears as an independent field in the original published FIRI model file, this is entirely redundant with the month number. Each day of year simply corresponds to the day number in the middle of each month. Therefore, we use only the month field.
@@ -39,26 +39,24 @@ This performs a simple linear interpolation at each altitude of the profile for 
 The average profile returned by `firi` is skewed towards higher electron densities. If preferred, profile quantiles can be returned with the function `FIRITools.quantile`. The quantile function is not exported to avoid collisions with `Statistics.quantile`. The usage of `FIRITools.quantile` is similar to `firi`, except the quantile(s) are specified by `p` on the interval [0, 1].
 
 ```julia
-profile = quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
+profile = FIRITools.quantile(p; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 ```
 
 There is also an interpolating form
 
 ```julia
-profile = quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
+profile = FIRITools.quantile(chi, lat, p; f10_7=(75, 200), month=(1, 12))
 ```
 
 ### Extrapolation by altitude
 
-To extrapolate the bottom of a profile to lower altitudes, use `FIRI.extrapolate`. This function will also interpolate to new (finer or coarser) altitudes in `newz`.
+To extrapolate the bottom of a profile to lower altitudes, use `FIRITools.extrapolate`. This function will also interpolate to new (finer or coarser) altitudes in `newz`.
 
 The function call is
 
 ```julia
-newprofile = extrapolate([z,] profile, newz; max_altitude=nothing, N=nothing)
+newprofile = FIRITools.extrapolate([z,] profile, newz)
 ```
-
-`max_altitude` is the maximum altitude from the bottom up of `z` used to build the exponential extrapolation. If `N` is provided, then `N` samples of the profile are used from the bottom up of `z`.
 
 ## Citations
 
