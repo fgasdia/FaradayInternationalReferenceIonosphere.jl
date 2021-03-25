@@ -133,11 +133,11 @@ newalt = 0:110
 p = plot(ylabel="altitude (km)", xlabel="Ne (m⁻³)", xscale=:log10, legend=:topleft,
          ylims=(0, 110), yticks=0:20:110, legendtitle="Latitude", xticks=exp10.([0, 3, 6, 9, 12]))
 for la in real_lats
-    prof = FIRITools.extrapolate(firi(45, la), newalt*1e3; N=6)
+    prof = FIRITools.extrapolate(firi(45, la), newalt*1e3)
     plot!(p, prof, newalt, label=la, color=cmap[findfirst(isequal(la), lats)])
 end
 for la in interp_lat
-    prof = FIRITools.extrapolate(firi(45, la), newalt*1e3; N=6)
+    prof = FIRITools.extrapolate(firi(45, la), newalt*1e3)
     plot!(p, prof, newalt, label=nothing, color=cmap[findfirst(isequal(la), lats)],
           linestyle=:dash)
 end
@@ -154,14 +154,37 @@ cmap = palette(:rainbow, N, rev=true)
 p = plot(ylabel="altitude (km)", xlabel="Ne (m⁻³)", xscale=:log10,
          ylims=(0, 110), yticks=0:20:110, legend=:topleft, legendtitle="SZA", xticks=exp10.([0, 3, 6, 9, 12]))
 for sza in real_sza
-    prof = FIRITools.extrapolate(firi(sza, 45), newalt*1e3; N=6)
+    prof = FIRITools.extrapolate(firi(sza, 45), newalt*1e3)
     plot!(p, prof, newalt, label=sza, color=cmap[findfirst(isequal(sza), chis)])
 end
 
 for sza in interp_sza
-    prof = FIRITools.extrapolate(firi(sza, 45), newalt*1e3; N=6)
+    prof = FIRITools.extrapolate(firi(sza, 45), newalt*1e3)
     plot!(p, prof, newalt, label=nothing, color=cmap[findfirst(isequal(sza), chis)],
           linestyle=:dash)
 end
 display(p)
 savefig(p, "sza_extrap.png")
+
+# Using median
+real_sza = unique(FIRITools.HEADER[!,"Chi, deg"])
+chis = 0:5:130
+interp_sza = setdiff(chis, real_sza)
+# interp_sza = [105, 110, 115, 120]
+N = length(chis)
+cmap = palette(:rainbow, N, rev=true)
+
+p = plot(ylabel="altitude (km)", xlabel="Ne (m⁻³)", xscale=:log10,
+         ylims=(0, 110), yticks=0:20:110, legend=:topleft, legendtitle="SZA", xticks=exp10.([0, 3, 6, 9, 12]))
+for sza in real_sza
+    prof = FIRITools.extrapolate(FIRITools.quantile(sza, 45, 0.5), newalt*1e3)
+    plot!(p, prof, newalt, label=sza, color=cmap[findfirst(isequal(sza), chis)])
+end
+
+for sza in interp_sza
+    prof = FIRITools.extrapolate(FIRITools.quantile(sza, 45, 0.5), newalt*1e3)
+    plot!(p, prof, newalt, label=nothing, color=cmap[findfirst(isequal(sza), chis)],
+          linestyle=:dash)
+end
+display(p)
+savefig(p, "sza_median_extrap.png")

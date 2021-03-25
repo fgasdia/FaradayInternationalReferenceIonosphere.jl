@@ -22,7 +22,7 @@ module FIRITools
 
 using Artifacts, Statistics
 using CSV, DataFrames
-using LsqFit, Interpolations
+using Interpolations
 
 export firi
 
@@ -47,8 +47,10 @@ function parseheader()
 end
 
 const HEADER = parseheader()
-const DATA = convert(Matrix, parse.(Float64, DF[8:end-2, 2:end]))  # last 2 rows have Missing
-const ALTITUDE = parse.(Int, DF[8:end-2, 1])*1000
+
+# Start altitude at 60 km even though table has down to 55 km (60 km is stated lower limit)
+const DATA = convert(Matrix, parse.(Float64, DF[13:end-2, 2:end]))  # last 2 rows have Missing
+const ALTITUDE = parse.(Int, DF[13:end-2, 1])*1000
 @assert length(ALTITUDE) == size(DATA, 1) "ALTITUDE does not match DATA"
 
 """
@@ -300,69 +302,31 @@ function _quantile(profiles, p)
     return profile
 end
 
-expmodel(z, p) = p[1]*exp.(z*p[2])
-
-function jacobian_expmodel(z, p)
-    J = Matrix{eltype(p)}(undef, length(z), length(p))
-    J[:,1] = exp.(p[2] .* z)       # df/dp[1]
-    J[:,2] = z .* p[1] .* J[:,1]   # df/dp[2]
-    return J
-end
 
 """
-    extrapolate([z,] profile, newz; max_altitude=nothing, N=nothing)
+    extrapolate([z,] profile, newz)
 
-Return `profile`, originally defined at sorted altitudes `z`, exponentially extrapolated
-at altitudes of `newz` below `z` and interpolated to `newz` elsewhere.
+Return `profile`, originally defined at sorted altitudes `z`, exponentially interpolated
+and extrapolated to altitudes of `newz`.
 
 If `z` is not specified, it is assumed that `profile` is defined at `FIRITools.ALTITUDE`.
-
-The extrapolation is performed using profile samples from the bottom altitude of `z` up to
-and including `max_altitude`.
-
-If `N` is provided, then `max_altitude` is automatically determined as the `N`th element of
-`z`.
 """
-function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRange;
-                     max_altitude=nothing, N=nothing)
-    isnothing(max_altitude) && isnothing(N) &&
-        throw(ArgumentError("At least one of `max_altitude` or `N` are required."))
-    issorted(z) || throw(ArgumentError("`z` must be sorted."))
+function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRange)
     length(z) == length(profile) ||
         throw(ArgumentError("`z` and `profile` must be equal lengths."))
-    maximum(newz) <= maximum(z) ||
-        @warn "`newz` extends above `maximum(z)`. `profile` will only be extrapolated below `max_altitude`."
     
-    if !isnothing(N)
-        max_altitude = z[N]
-    end
+    itp = LinearInterpolation(z, log.(profile), extrapolation_bc=Line())
+    itpprofile = itp(newz)
 
-    p0 = [1.0, 3e-4]
-    mask = z .<= max_altitude
-    fit = curve_fit(expmodel, jacobian_expmodel, z[mask], profile[mask], p0)
-    fit.converged || @warn "Exponential fit did not converge"
-
-    extrapz = filter(x -> x <= max_altitude, newz)
-    itpmask = max_altitude > minimum(newz) ? (max_altitude .< newz .<= maximum(newz)) :
-        (minimum(newz) .<= newz .<= maximum(newz))
-    
-    itp = CubicSplineInterpolation(z, profile)
-
-    extrapprofile = expmodel(extrapz, fit.param)
-    itpprofile = itp(newz[itpmask])
-
-    return [extrapprofile; itpprofile]
+    return exp.(itpprofile)
 end
-extrapolate(profile, newz; max_altitude=nothing, N=nothing) =
-    extrapolate(minimum(ALTITUDE):1000:maximum(ALTITUDE), profile, newz;
-                max_altitude=max_altitude, N=N)    
+extrapolate(profile, newz) = extrapolate(ALTITUDE[begin]:1000:ALTITUDE[end], profile, newz)    
 
-function extrapolate(z::AbstractRange, profile::AbstractMatrix, newz::AbstractRange;
-                     max_altitude=nothing, N=nothing)
+function extrapolate(z::AbstractRange, profile::AbstractMatrix, newz::AbstractRange)
     expprofile = Vector{eltype(profile)}()
     nrows = 0
     for i in axes(profile, 2)
-        p = extrapolate(z, view(profile,:,i), newz; max_altitude=max_altitude, N=N)
+        p = extrapolate(z, view(profile,:,i), newz)
         append!(expprofile, p)
         nrows = length(p)
     end
