@@ -20,37 +20,33 @@ Journal of Geophysical Research: Space Physics, 123, 6737-6751.
 """
 module FIRITools
 
-using Artifacts, Statistics
-using CSV, DataFrames
+using Artifacts, Statistics, DelimitedFiles
+using TypedTables
 using Interpolations
 
 export firi
 
 const MIN_DENSITY = 1e-4
 
-const DF = CSV.read(joinpath(artifact"firi", "firi2018.csv"), DataFrame)
+const DF = readdlm(joinpath(artifact"firi", "firi2018.csv"), ',')
 
 function parseheader()
-    types = Dict(:Code=>String, :Month=>Int, "Chi, deg"=>Int, "Lat, deg"=>Int, :F10_7=>Int)
+    df = Table(
+        code=convert(Vector{String}, DF[2,2:end]),
+        month=convert(Vector{Int}, DF[3,2:end]),
+        chi=convert(Vector{Int}, DF[5,2:end]),  # deg
+        lat=convert(Vector{Int}, DF[6,2:end]),  # deg
+        f10_7=convert(Vector{Int}, DF[7,2:end])
+    )
 
-    tmpheader = permutedims(first(DF, 6), 1)
-
-    df = DataFrame()
-    for (s, t) in types
-        if t == String
-            df[!,s] = tmpheader[!,s]
-        else
-            df[!,s] = parse.(t, tmpheader[!,s])
-        end
-    end
     return df
 end
 
 const HEADER = parseheader()
 
 # Start altitude at 60 km even though table has down to 55 km (60 km is stated lower limit)
-const DATA = convert(Matrix, parse.(Float64, DF[13:end-2, 2:end]))  # last 2 rows have Missing
-const ALTITUDE = parse.(Int, DF[13:end-2, 1])*1000
+const DATA = convert(Matrix{Float64}, DF[14:end-2, 2:end])  # last 2 rows have Missing
+const ALTITUDE = convert(Vector{Int}, DF[14:end-2, 1])*1000  # convert to m
 @assert length(ALTITUDE) == size(DATA, 1) "ALTITUDE does not match DATA"
 
 """
@@ -60,7 +56,7 @@ Return the FIRI model values of parameter `s`.
 """
 function values(s)
     if s in ("f10_7", :f10_7)
-        return [75, 130, 200]  # == unique(FIRITools.HEADER[!,:F10_7])
+        return [75, 130, 200]  # == unique(HEADER.f10_7)
     elseif s in ("chi", :chi)
         return [0, 30, 45, 60, 75, 80, 85, 90, 95, 100, 130]
     elseif s in ("lat", :lat)
@@ -104,12 +100,12 @@ end
 Return matrix of selected model profiles.
 """
 function selectprofiles(;chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
-    mask = trues(nrow(HEADER))
+    mask = trues(length(HEADER))
 
-    mask .&= select(HEADER[!,"Chi, deg"], chi) .&
-             select(HEADER[!,"Lat, deg"], lat) .&
-             select(HEADER[!,:F10_7], f10_7)   .&
-             select(HEADER[!,:Month], month)
+    mask .&= select(HEADER.chi, chi) .&
+             select(HEADER.lat, lat) .&
+             select(HEADER.f10_7, f10_7) .&
+             select(HEADER.month, month)
 
     return DATA[:,mask]
 end
@@ -121,8 +117,8 @@ Return matrix of selected model profiles interpolated at solar zenith angle `chi
 latitude `lat`.
 """
 function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
-    issorted(unique(HEADER[!, "Chi, deg"])) || throw(DomainError("Chi column of HEADER is not sorted"))
-    issorted(unique(HEADER[!, "Lat, deg"])) || throw(DomainError("Lat column of HEADER is not sorted"))
+    issorted(unique(HEADER.chi)) || throw(DomainError("chi column of HEADER is not sorted"))
+    issorted(unique(HEADER.lat)) || throw(DomainError("lat column of HEADER is not sorted"))
 
     if chi > 130
         @warn "`chi` greater than 130° uses `chi = 130°`" maxlog=3
@@ -133,17 +129,17 @@ function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
         throw(ArgumentError("`chi` or `lat` below 0° is not supported. See Friedrich et al., “FIRI-2018”."))
     end
 
-    mask = trues(nrow(HEADER))
+    mask = trues(length(HEADER))
 
-    mask .&= select(HEADER[!,:F10_7], f10_7) .&
-             select(HEADER[!,:Month], month)
+    mask .&= select(HEADER.f10_7, f10_7) .&
+             select(HEADER.month, month)
 
-    chibnds = twoclosest(HEADER[!,"Chi, deg"], chi)
-    latbnds = twoclosest(HEADER[!,"Lat, deg"], lat)
+    chibnds = twoclosest(HEADER.chi, chi)
+    latbnds = twoclosest(HEADER.lat, lat)
 
     # Mask all but the 2 closest values of chi and lat to the target chi and lat
-    mask .&= .!isnothing.(indexin(HEADER[!,"Chi, deg"], chibnds)) .&
-             .!isnothing.(indexin(HEADER[!,"Lat, deg"], latbnds))
+    mask .&= .!isnothing.(indexin(HEADER.chi, chibnds)) .&
+             .!isnothing.(indexin(HEADER.lat, latbnds))
 
     N = count(mask)
     maskidxs = findall(mask)

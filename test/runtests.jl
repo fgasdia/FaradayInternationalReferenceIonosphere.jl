@@ -1,22 +1,23 @@
 using FIRITools
-using Test, Statistics
-using CSV, DataFrames
+using Test, Statistics, DelimitedFiles
+using TypedTables
 
 
 @testset "FIRITools.jl" begin
     ALTITUDE_LENGTH = 89
     @test size(FIRITools.DATA) == (ALTITUDE_LENGTH, 1980)  # for firi2018
-    @test size(FIRITools.HEADER) == (1980, 5)
+    @test length(FIRITools.HEADER) == 1980
+    @test length(columnnames(FIRITools.HEADER)) == 5
 
     @test FIRITools.values(:f10_7) == FIRITools.values("f10_7")
-    @test FIRITools.values(:f10_7) == unique(FIRITools.HEADER[!,:F10_7])
-    @test FIRITools.values(:chi) == unique(FIRITools.HEADER[!,"Chi, deg"])
-    @test FIRITools.values(:lat) == unique(FIRITools.HEADER[!,"Lat, deg"])
-    @test FIRITools.values(:month) == unique(FIRITools.HEADER[!,"Month"])
+    @test FIRITools.values(:f10_7) == unique(FIRITools.HEADER.f10_7)
+    @test FIRITools.values(:chi) == unique(FIRITools.HEADER.chi)
+    @test FIRITools.values(:lat) == unique(FIRITools.HEADER.lat)
+    @test FIRITools.values(:month) == unique(FIRITools.HEADER.month)
 
-    @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 90) == [90, 90]
-    @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 89) == [85, 90]
-    @test FIRITools.twoclosest(FIRITools.HEADER[!,"Chi, deg"], 135) == [100, 130]
+    @test FIRITools.twoclosest(FIRITools.HEADER.chi, 90) == [90, 90]
+    @test FIRITools.twoclosest(FIRITools.HEADER.chi, 89) == [85, 90]
+    @test FIRITools.twoclosest(FIRITools.HEADER.chi, 135) == [100, 130]
 
     @test size(FIRITools.selectprofiles()) == (ALTITUDE_LENGTH, 1980)
     @test size(FIRITools.selectprofiles(month=(1, 6))) == (ALTITUDE_LENGTH, 1980÷2)
@@ -54,14 +55,15 @@ using CSV, DataFrames
 
     function quantilewoextrap(ref, p)
         # Compare to reference profiles without extrapolation
-        refmask = [a in FIRITools.ALTITUDE[:,1] for a in ref.alt]
-        fmask = [a in ref.alt for a in FIRITools.ALTITUDE[:,1]] 
-        isapprox(ref.ne[refmask],
+        v, h = ref  # values, header
+        refmask = [a in FIRITools.ALTITUDE[:,1] for a in v[:,1]]
+        fmask = [a in v[:,1] for a in FIRITools.ALTITUDE[:,1]] 
+        isapprox(v[refmask,2],
                  FIRITools.quantile(chi=(0, 95), p)[fmask], rtol=0.01)
     end
 
-    @test quantilewoextrap(CSV.read("FIRIday_30.csv", DataFrame), 0.3)
-    @test quantilewoextrap(CSV.read("FIRIday_90.csv", DataFrame), 0.9)
+    @test quantilewoextrap(readdlm("FIRIday_30.csv", ','; header=true), 0.3)
+    @test quantilewoextrap(readdlm("FIRIday_90.csv", ','; header=true), 0.9)
 
     # plot(ref30.ne, ref30.alt, label="Wei 30", xlims=(10^4, 4e10), ylims=(55, 110), xscale=:log10)
     # plot!(FIRITools.quantile(chi=(0, 95), 0.3), FIRITools.ALTITUDE, label=30, xscale=:log10)
