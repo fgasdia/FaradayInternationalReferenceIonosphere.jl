@@ -42,9 +42,10 @@ using TypedTables
     @test size(firi(month=(1, 6))) == (ALTITUDE_LENGTH,)
     @test size(firi(15, 10)) == (ALTITUDE_LENGTH,)
 
+    @test firi(160, 45) == firi(130, 45)  # floor chi to 130°
+
     @test_throws ArgumentError firi(-10, 45)
     @test_throws ArgumentError firi(30, -15)
-    @test_logs (:warn, "`chi` greater than 130° uses `chi = 130°`") firi(160, 45)
 
     @test FIRITools.quantile(1, chi=(0, 90)) ==
         Statistics.quantile.(eachrow(FIRITools.selectprofiles(chi=(0, 90))), 1)
