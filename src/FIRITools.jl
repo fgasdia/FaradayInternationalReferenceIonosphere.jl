@@ -115,13 +115,15 @@ end
 
 Return matrix of selected model profiles interpolated at solar zenith angle `chi` and
 latitude `lat`.
+
+No extrapolation is performed for `chi` greater than 130°. If `chi` is greater than
+130°, it will be substituted by `chi = 130`.
 """
 function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
     issorted(unique(HEADER.chi)) || throw(DomainError("chi column of HEADER is not sorted"))
     issorted(unique(HEADER.lat)) || throw(DomainError("lat column of HEADER is not sorted"))
 
     if chi > 130
-        @warn "`chi` greater than 130° uses `chi = 130°`" maxlog=3
         chi = oftype(chi, 130)
     end
 
