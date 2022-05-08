@@ -17,12 +17,12 @@ profile = firi(; chi=(0, 130), lat=(0, 60), f10_7=(75, 200), month=(1, 12))
 Each of the keyword arguments can either be a `Tuple` that inclusively brackets the range of values to be included in the average profile or can be a single value. Note that no interpolation occurs! If the value specified for `f10_7` is `100` (which is not one of the values in the model output) then a warning will be printed and an empty profile will be 
 returned.
 
-> :star: **TIP:**
+> :star: **Tip:**
 >
 > For convenience, load the package into your environment like
 > ```julia
 > using FaradayInternationalReferenceIonosphere
-> import FaradayInternationalReferenceIonosphere.jl as FIRI
+> import FaradayInternationalReferenceIonosphere as FIRI
 > ```
 > The first line brings `firi` into scope. If that's all you need, then you can stop there. However, the second line lets you reference the package using the shorthand `FIRI`. I assume the package has been loaded this way in the examples below.
 
