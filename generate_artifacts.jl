@@ -11,15 +11,16 @@ as a source URL for artifact. The original data is under a CC BY 4.0 license whi
 freedom to share (copy and redistribute in any medium or format) and adapt as long as
 appropriate credit is provided.
 
-Finally, ArtifactUtils.jl is used to generate the Artifact.toml file for FIRITools.jl.
+Finally, ArtifactUtils.jl is used to generate the Artifact.toml file for
+FaradayInternationalReferenceIonosphere.jl.
 ==#
 
-# These packages are not all in FIRITools Project.toml
+# These packages are not all in FaradayInternationalReferenceIonosphere Project.toml
 using Artifacts, ArtifactUtils
 using CSV, DataFrames, XLSX
 using Tar, CodecZlib
 
-using FIRITools
+using FaradayInternationalReferenceIonosphere as FIRI
 
 # User friendly URL is: https://figshare.com/s/357cb03b3e5bed649bbc
 firi2018_url = "https://ndownloader.figshare.com/files/11823206?private_link=357cb03b3e5bed649bbc"
