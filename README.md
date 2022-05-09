@@ -4,7 +4,7 @@
 
 **Julia tools for working with FIRI ionosphere profiles.**
 
-The Faraday-International Reference Ionosphere (FIRI) is a semiempirical model of the nonauroral ionosphere that enhances and extends the IRI model down to 60 km and densities above 10⁶ e-/m³. FIRI blends results from a simple ion-chemical model with sounding rocket profiles made by Langmuir probe and HF Faraday rotation measurements. FIRI-2018 is the most recent version of the model, but it was originally published in 2001. See the [Citations](#citations) section below.
+The Faraday-International Reference Ionosphere (FIRI) is a semiempirical model of the nonauroral ionosphere that enhances and extends the IRI model down to 60 km and densities above 10⁶ e-/m³. FIRI blends results from a simple ion-chemical model with sounding rocket profiles made by Langmuir probe and HF Faraday rotation measurements. FIRI-2018 is the most recent version of the model by M. Friedrich, C. Pock, and K. Torkar, but it was originally published in 2001 by Friedrich and Torkar. See the [Citations](#citations) section below.
 
 ## Usage
 

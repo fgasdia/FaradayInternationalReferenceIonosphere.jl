@@ -1,3 +1,7 @@
+# The FIRI-2018 model data is originally provided by M. Friedrich, C. Pock, and K. Torkar.
+# It is available at: https://figshare.com/s/357cb03b3e5bed649bbc under the CC BY 4.0 license (https://creativecommons.org/licenses/by/4.0/#).
+# I have repackaged the data for compatibility with Julia Artifacts and made it available at figshare.com under the same CC BY 4.0 license.
+
 [firi]
 git-tree-sha1 = "90cc57fddd53cb427ea3b91dd4bd85037d42b494"
 

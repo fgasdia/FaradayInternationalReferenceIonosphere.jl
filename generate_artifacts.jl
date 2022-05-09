@@ -20,8 +20,6 @@ using Artifacts, ArtifactUtils
 using CSV, DataFrames, XLSX
 using Tar, CodecZlib
 
-using FaradayInternationalReferenceIonosphere as FIRI
-
 # User friendly URL is: https://figshare.com/s/357cb03b3e5bed649bbc
 firi2018_url = "https://ndownloader.figshare.com/files/11823206?private_link=357cb03b3e5bed649bbc"
 
