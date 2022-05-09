@@ -56,7 +56,7 @@ savefig("day_mean_chizoom.png")
 
 # Check to see if interpolation is acting as expected
 
-real_lats = unique(FIRI.HEADER[!,"Lat, deg"])
+real_lats = unique(FIRI.HEADER.lat)
 lats = 0:5:90
 interp_lat = setdiff(lats, real_lats)
 N = length(lats)
@@ -76,7 +76,7 @@ end
 display(p)
 savefig("lat.png")
 
-real_sza = unique(FIRI.HEADER[!,"Chi, deg"])
+real_sza = unique(FIRI.HEADER.chi)
 chis = 0:5:130
 interp_sza = setdiff(chis, real_sza)
 # interp_sza = [105, 110, 115, 120]
@@ -124,7 +124,7 @@ savefig("sza_zoom.png")
 ###
 # With extrapolation to ground
 
-real_lats = unique(FIRI.HEADER[!,"Lat, deg"])
+real_lats = unique(FIRI.HEADER.lat)
 lats = 0:5:90
 interp_lat = setdiff(lats, real_lats)
 N = length(lats)
@@ -145,18 +145,18 @@ end
 display(p)
 savefig("lat_extrap.png")
 
-real_sza = unique(FIRI.HEADER[!,"Chi, deg"])
-chis = 0:5:130
+real_sza = unique(FIRI.HEADER.chi)
+chis = 0:1:130
 interp_sza = setdiff(chis, real_sza)
 # interp_sza = [105, 110, 115, 120]
 N = length(chis)
 cmap = palette(:rainbow, N, rev=true)
 
-p = plot(ylabel="altitude (km)", xlabel="Ne (m⁻³)", xscale=:log10,
-         ylims=(0, 110), yticks=0:20:110, legend=:topleft, legendtitle="SZA", xticks=exp10.([0, 3, 6, 9, 12]))
+p = plot(ylabel="Altitude (km)", xlabel="Ne (m⁻³)", xscale=:log10, xlims=(1e3, 5e11),
+         ylims=(40, 110), yticks=0:10:110, legend=:topleft, legendtitle="SZA", xticks=exp10.([0, 4, 6, 8, 10]))
 for sza in real_sza
     prof = FIRI.extrapolate(firi(sza, 45), newalt*1e3)
-    plot!(p, prof, newalt, label=sza, color=cmap[findfirst(isequal(sza), chis)])
+    plot!(p, prof, newalt, label=sza, color=cmap[findfirst(isequal(sza), chis)], linewidth=2)
 end
 
 for sza in interp_sza
@@ -164,11 +164,13 @@ for sza in interp_sza
     plot!(p, prof, newalt, label=nothing, color=cmap[findfirst(isequal(sza), chis)],
           linestyle=:dash)
 end
+annotate!([(5e6, 48,
+    ("FIRI profiles at 45°N,\ninterpolated over solar zenith angle,\naveraged over all months and F10.7 indices,\nand extrapolated below 60km.", 9, :black, :left))])
 display(p)
 savefig(p, "sza_extrap.png")
 
 # Using median
-real_sza = unique(FIRI.HEADER[!,"Chi, deg"])
+real_sza = unique(FIRI.HEADER.chi)
 chis = 0:5:130
 interp_sza = setdiff(chis, real_sza)
 # interp_sza = [105, 110, 115, 120]
