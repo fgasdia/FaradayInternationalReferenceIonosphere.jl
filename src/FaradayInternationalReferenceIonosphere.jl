@@ -165,7 +165,7 @@ function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
         for i = 1:2:N
             for a in axes(DATA, 1)  # altitude
                 d = DATA[a,maskidxs[[i, i+1]]]
-                itp = LinearInterpolation(latbnds, d, extrapolation_bc=Line())
+                itp = linear_interpolation(latbnds, d, extrapolation_bc=Line())
                 profiles[a,j] = itp(lat)
             end
             j += 1
@@ -177,7 +177,7 @@ function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
         for i = 1:2:N
             for a in axes(DATA, 1)  # altitude
                 d = DATA[a,maskidxs[[i, i+1]]]
-                itp = LinearInterpolation(chibnds, d, extrapolation_bc=Line())
+                itp = linear_interpolation(chibnds, d, extrapolation_bc=Line())
                 profiles[a,j] = itp(chi)
             end
             j += 1
@@ -195,7 +195,7 @@ function selectprofiles(chi, lat; f10_7=(75, 200), month=(1, 12))
             for a in axes(DATA, 1)  # altitude
                 d = [DATA[a,maskidxs[i]] DATA[a,maskidxs[i+2]];
                      DATA[a,maskidxs[i+1]] DATA[a,maskidxs[i+3]]]
-                itp = LinearInterpolation((chibnds, latbnds), d, extrapolation_bc=Line())
+                itp = linear_interpolation((chibnds, latbnds), d, extrapolation_bc=Line())
                 profiles[a,j] = itp(chi, lat)
             end
             j += 1
@@ -323,7 +323,7 @@ function extrapolate(z::AbstractRange, profile::AbstractVector, newz::AbstractRa
     length(z) == length(profile) ||
         throw(ArgumentError("`z` and `profile` must be equal lengths."))
     
-    itp = LinearInterpolation(z, log.(profile), extrapolation_bc=Line())
+    itp = linear_interpolation(z, log.(profile), extrapolation_bc=Line())
     itpprofile = itp(newz)
 
     return exp.(itpprofile)
